@@ -4,11 +4,12 @@ If you encountered "workload not installed" errors when creating the MonoGame pr
 
 ## 1. Install .NET Workloads
 
-These commands install the necessary packages to develop for Android and iOS:
+These commands install the necessary packages to develop for Android, iOS, and WebAssembly:
 
 ```bash
 dotnet workload install android
 dotnet workload install ios
+dotnet workload install wasm-tools
 ```
 
 *(Note: The iOS workload requires that you are on macOS with Xcode installed).*
@@ -45,4 +46,18 @@ To run the project on iOS (make sure you have a simulator or device configured v
 
 ```bash
 dotnet build MyGame.iOS -t:Run
+```
+
+## 6. Run the Game (Browser / WebAssembly)
+
+To compile and play directly in the browser using WebAssembly:
+
+```bash
+dotnet run --project MyGame.Browser
+```
+
+To generate the final files ready for production (Release), run:
+
+```bash
+dotnet publish MyGame.Browser -c Release
 ```
