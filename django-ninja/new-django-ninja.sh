@@ -51,6 +51,9 @@ ask_yn "Install Ruff (fast linter and code formatter by Astral) as dev dependenc
 CREATE_SAMPLE_APP=N
 ask_yn "Scaffold a sample modular app in 'apps/core' with Ninja Router?" "Y" && CREATE_SAMPLE_APP=Y
 
+USE_BRAZIL_LOCALE=N
+ask_yn "Configure Brazilian Portuguese locale & timezone (pt-br / America/Fortaleza)?" "Y" && USE_BRAZIL_LOCALE=Y
+
 RUN_MIGRATIONS=N
 ask_yn "Run initial database migrations?" "Y" && RUN_MIGRATIONS=Y
 
@@ -59,16 +62,17 @@ ask_yn "Initialize git repository and initial commit?" "Y" && INIT_GIT=Y
 
 echo
 echo "=========================================="
-echo "Project:     $NAME"
-echo "Directory:   $DIR"
-echo "Python:      $PYTHON_VERSION"
-echo "Scalar Docs: $USE_SCALAR"
-echo "CORS:        $USE_CORS"
-echo "Ninja Extra: $USE_EXTRA"
-echo "Ruff:        $USE_RUFF"
-echo "Sample App:  $CREATE_SAMPLE_APP"
-echo "Migrations:  $RUN_MIGRATIONS"
-echo "Git Init:    $INIT_GIT"
+echo "Project:        $NAME"
+echo "Directory:      $DIR"
+echo "Python:         $PYTHON_VERSION"
+echo "Scalar Docs:    $USE_SCALAR"
+echo "CORS:           $USE_CORS"
+echo "Ninja Extra:    $USE_EXTRA"
+echo "Ruff:           $USE_RUFF"
+echo "Sample App:     $CREATE_SAMPLE_APP"
+echo "Brazil Locale:  $USE_BRAZIL_LOCALE"
+echo "Migrations:     $RUN_MIGRATIONS"
+echo "Git Init:       $INIT_GIT"
 echo "=========================================="
 ask_yn "Confirm project creation?" "Y" || {
   echo "Cancelled."
@@ -129,11 +133,25 @@ new_lines = []
 
 use_cors = '$USE_CORS' == 'Y'
 use_core = '$CREATE_SAMPLE_APP' == 'Y'
+use_brazil_locale = '$USE_BRAZIL_LOCALE' == 'Y'
 
 for line in lines:
     if line.startswith('ALLOWED_HOSTS = '):
         new_lines.append(\"ALLOWED_HOSTS = ['*']\")
         continue
+    if use_brazil_locale:
+        if line.startswith('LANGUAGE_CODE ='):
+            new_lines.append(\"LANGUAGE_CODE = 'pt-br'\")
+            continue
+        if line.startswith('TIME_ZONE ='):
+            new_lines.append(\"TIME_ZONE = 'America/Fortaleza'\")
+            continue
+        if line.startswith('USE_I18N ='):
+            new_lines.append('USE_I18N = True')
+            continue
+        if line.startswith('USE_TZ ='):
+            new_lines.append('USE_TZ = True')
+            continue
     new_lines.append(line)
     if 'BASE_DIR = ' in line:
         new_lines.append('')
@@ -281,7 +299,7 @@ if [[ "$INIT_GIT" == "Y" ]]; then
   echo "🌱 11. Initializing Git repository..."
   git init -q
   git add .
-  git commit -q -m "Initial commit: Django Ninja project created with UV (Python $PYTHON_VERSION)"
+  git commit -q -m "Initial commit"
 fi
 
 echo

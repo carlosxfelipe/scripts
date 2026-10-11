@@ -13,7 +13,7 @@ chmod +x new-django-ninja.sh
 ./new-django-ninja.sh
 ```
 
-The script will prompt you for the project name, Python version (defaults to `3.14`, with automatic fallback if an unrecognized version is entered), and whether to include Scalar, CORS, Django Ninja Extra, Ruff (linter/formatter), a modular sample app, migrations, and Git. In seconds, your project will be created, formatted, migrated, and ready to run.
+The script will prompt you for the project name, Python version (defaults to `3.14`, with automatic fallback if an unrecognized version is entered), and whether to include Scalar, CORS, Django Ninja Extra, Ruff (linter/formatter), a modular sample app, Brazilian Portuguese locale/timezone (`pt-br` / `America/Fortaleza`), migrations, and Git. In seconds, your project will be created, formatted, migrated, and ready to run.
 
 ---
 
@@ -106,6 +106,15 @@ MIDDLEWARE = [
 # Allow all origins during local development
 CORS_ALLOW_ALL_ORIGINS = True
 ALLOWED_HOSTS = ['*']  # For local development
+```
+
+#### d) Localization and Timezone (Brazilian Portuguese / America/Fortaleza)
+
+```python
+LANGUAGE_CODE = 'pt-br'
+TIME_ZONE = 'America/Fortaleza'
+USE_I18N = True
+USE_TZ = True
 ```
 
 ---
