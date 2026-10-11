@@ -3,9 +3,9 @@
 OS="$(uname)"
 
 if [[ "$OS" == *"MINGW"* ]] || [[ "$OS" == *"CYGWIN"* ]] || [[ "$OS" == *"MSYS"* ]]; then
-    echo "❌ Error: This script is not compatible with Windows (Git Bash/Cygwin/MSYS)."
-    echo "Please use a PowerShell script for Windows environments."
-    exit 1
+  echo "❌ Error: This script is not compatible with Windows (Git Bash/Cygwin/MSYS)."
+  echo "Please use a PowerShell script for Windows environments."
+  exit 1
 fi
 
 echo "🧹 Starting system cache cleanup..."
@@ -22,9 +22,9 @@ rm -rf ~/.bun/install/cache
 
 echo "🦕 4. Cleaning Deno..."
 if [ "$OS" = "Darwin" ]; then
-    rm -rf ~/Library/Caches/deno
+  rm -rf ~/Library/Caches/deno
 else
-    rm -rf ~/.cache/deno
+  rm -rf ~/.cache/deno
 fi
 
 echo "📱 5. Cleaning Flutter/Dart..."
@@ -42,11 +42,11 @@ echo "🐍 8. Cleaning Python (pip & uv)..."
 pip cache purge 2>/dev/null
 uv cache clean 2>/dev/null
 if [ "$OS" = "Darwin" ]; then
-    rm -rf ~/Library/Caches/pip
-    rm -rf ~/Library/Caches/uv
+  rm -rf ~/Library/Caches/pip
+  rm -rf ~/Library/Caches/uv
 else
-    rm -rf ~/.cache/pip
-    rm -rf ~/.cache/uv
+  rm -rf ~/.cache/pip
+  rm -rf ~/.cache/uv
 fi
 
 echo "✨ Cleanup completed successfully!"
