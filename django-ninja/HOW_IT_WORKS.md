@@ -13,7 +13,7 @@ chmod +x new-django-ninja.sh
 ./new-django-ninja.sh
 ```
 
-The script will prompt you for the project name, Python version (defaults to `3.14`, with automatic fallback if an unrecognized version is entered), and whether to include Scalar, CORS, Django Ninja Extra, Ruff (linter/formatter), a modular sample app, Brazilian Portuguese locale/timezone (`pt-br` / `America/Fortaleza`), migrations, and Git. In seconds, your project will be created, formatted, migrated, and ready to run.
+The script will prompt you for the project name, Python version (defaults to `3.14`, with automatic fallback if an unrecognized version is entered), and whether to include Scalar, CORS, JWT Authentication (`django-ninja-jwt` + `email-validator`), Django Ninja Extra, Ruff (linter/formatter), Django Stubs (type safety & IDE autocomplete), a modular sample app, Brazilian Portuguese locale/timezone (`pt-br` / `America/Fortaleza`), migrations, and Git. In seconds, your project will be created, formatted, migrated, and ready to run.
 
 ---
 
@@ -28,17 +28,22 @@ uv init my_project --python 3.14
 cd my_project
 ```
 
-### 2. Install Django, API Dependencies, and Ruff
+### 2. Install Django, API Dependencies, and Dev Tools
 
 ```bash
-# Production dependencies
+# Core API dependencies
 uv add django django-ninja scalar-ninja django-cors-headers
 
-# Development tools (Linter & Formatter)
-uv add --dev ruff
+# JWT Authentication & Email validation (optional but recommended for modern APIs)
+# email-validator is required by Pydantic (used in Ninja Schemas) when validating EmailStr fields
+uv add django-ninja-jwt email-validator
+
+# Development tools (Linter, Formatter & Type Stubs)
+uv add --dev ruff django-stubs
 ```
 
-> **Optional (for larger projects requiring Class-Based Controllers & Dependency Injection):**
+> **Note on JWT & Extra:**
+> `django-ninja-jwt` already includes `django-ninja-extra` and provides controllers for `/api/token/pair`, `/api/token/refresh`, `/api/token/verify`, and `/api/token/blacklist`. If you only need Class-Based Controllers without JWT, install `django-ninja-extra` alone:
 >
 > ```bash
 > uv add django-ninja-extra

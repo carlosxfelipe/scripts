@@ -42,11 +42,21 @@ ask_yn "Use Scalar for interactive API docs (modern Swagger alternative)?" "Y" &
 USE_CORS=N
 ask_yn "Configure django-cors-headers (recommended for Web/Mobile APIs)?" "Y" && USE_CORS=Y
 
+USE_JWT=N
+ask_yn "Configure JWT authentication (django-ninja-jwt + email-validator)?" "Y" && USE_JWT=Y
+
 USE_EXTRA=N
-ask_yn "Include django-ninja-extra (Class-based controllers, DI, permissions)?" "N" && USE_EXTRA=Y
+if [[ "$USE_JWT" == "Y" ]]; then
+  USE_EXTRA=Y
+else
+  ask_yn "Include django-ninja-extra (Class-based controllers, DI, permissions)?" "N" && USE_EXTRA=Y
+fi
 
 USE_RUFF=N
 ask_yn "Install Ruff (fast linter and code formatter by Astral) as dev dependency?" "Y" && USE_RUFF=Y
+
+USE_DJANGO_STUBS=N
+ask_yn "Install django-stubs (typing and editor autocomplete) as dev dependency?" "Y" && USE_DJANGO_STUBS=Y
 
 CREATE_SAMPLE_APP=N
 ask_yn "Scaffold a sample modular app in 'apps/core' with Ninja Router?" "Y" && CREATE_SAMPLE_APP=Y
@@ -67,8 +77,10 @@ echo "Directory:      $DIR"
 echo "Python:         $PYTHON_VERSION"
 echo "Scalar Docs:    $USE_SCALAR"
 echo "CORS:           $USE_CORS"
+echo "JWT Auth:       $USE_JWT"
 echo "Ninja Extra:    $USE_EXTRA"
 echo "Ruff:           $USE_RUFF"
+echo "Django Stubs:   $USE_DJANGO_STUBS"
 echo "Sample App:     $CREATE_SAMPLE_APP"
 echo "Brazil Locale:  $USE_BRAZIL_LOCALE"
 echo "Migrations:     $RUN_MIGRATIONS"
@@ -90,13 +102,20 @@ echo "📦 2. Installing dependencies..."
 DEPS=("django" "django-ninja")
 [[ "$USE_SCALAR" == "Y" ]] && DEPS+=("scalar-ninja")
 [[ "$USE_CORS" == "Y" ]] && DEPS+=("django-cors-headers")
-[[ "$USE_EXTRA" == "Y" ]] && DEPS+=("django-ninja-extra")
+[[ "$USE_EXTRA" == "Y" && "$USE_JWT" != "Y" ]] && DEPS+=("django-ninja-extra")
+if [[ "$USE_JWT" == "Y" ]]; then
+  DEPS+=("django-ninja-jwt" "email-validator")
+fi
 
 uv add "${DEPS[@]}"
 
-if [[ "$USE_RUFF" == "Y" ]]; then
-  echo "🧹 2.1 Installing Ruff dev dependency..."
-  uv add --dev ruff
+DEV_DEPS=()
+[[ "$USE_RUFF" == "Y" ]] && DEV_DEPS+=("ruff")
+[[ "$USE_DJANGO_STUBS" == "Y" ]] && DEV_DEPS+=("django-stubs")
+
+if [[ ${#DEV_DEPS[@]} -gt 0 ]]; then
+  echo "🛠️  2.1 Installing dev dependencies (${DEV_DEPS[*]})..."
+  uv add --dev "${DEV_DEPS[@]}"
 fi
 
 echo "🏗️  3. Creating Django project structure..."
@@ -104,6 +123,21 @@ uv run django-admin startproject config .
 
 mkdir -p apps
 touch apps/__init__.py
+
+# Configure static analysis search paths for editors/IDEs (Pyright, Pyrefly, ty)
+cat <<'EOF' >>pyproject.toml
+
+# The editor's static analysis doesn't run settings.py, so it can't see
+# sys.path.insert(0, BASE_DIR / "apps"). Tell it where apps live.
+[tool.pyrefly]
+search-path = ["apps"]
+
+[tool.pyright]
+extraPaths = ["apps"]
+
+[tool.ty.environment]
+extra-paths = ["apps"]
+EOF
 
 if [[ "$CREATE_SAMPLE_APP" == "Y" ]]; then
   echo "🧩 4. Scaffolding sample modular app 'core' in apps/..."
@@ -132,8 +166,12 @@ lines = content.splitlines()
 new_lines = []
 
 use_cors = '$USE_CORS' == 'Y'
+use_jwt = '$USE_JWT' == 'Y'
+use_extra = '$USE_EXTRA' == 'Y' or use_jwt
 use_core = '$CREATE_SAMPLE_APP' == 'Y'
 use_brazil_locale = '$USE_BRAZIL_LOCALE' == 'Y'
+
+has_timedelta_import = False
 
 for line in lines:
     if line.startswith('ALLOWED_HOSTS = '):
@@ -153,7 +191,10 @@ for line in lines:
             new_lines.append('USE_TZ = True')
             continue
     new_lines.append(line)
-    if 'BASE_DIR = ' in line:
+    if 'from pathlib import Path' in line and use_jwt:
+        new_lines.append('from datetime import timedelta')
+        has_timedelta_import = True
+    elif 'BASE_DIR = ' in line:
         new_lines.append('')
         new_lines.append('# Add apps directory to Python path for clean modular imports')
         new_lines.append('import sys')
@@ -161,11 +202,20 @@ for line in lines:
     elif 'INSTALLED_APPS = [' in line:
         if use_cors:
             new_lines.append('    \"corsheaders\",')
+        if use_jwt:
+            new_lines.append('    \"ninja_extra\",')
+            new_lines.append('    \"ninja_jwt\",')
+            new_lines.append('    \"ninja_jwt.token_blacklist\",')
+        elif use_extra:
+            new_lines.append('    \"ninja_extra\",')
         if use_core:
             new_lines.append('    \"core\",')
     elif 'MIDDLEWARE = [' in line:
         if use_cors:
             new_lines.append('    \"corsheaders.middleware.CorsMiddleware\",')
+
+if use_jwt and not has_timedelta_import:
+    new_lines.insert(0, 'from datetime import timedelta')
 
 result = '\n'.join(new_lines) + '\n'
 
@@ -175,12 +225,144 @@ if use_cors:
 CORS_ALLOW_ALL_ORIGINS = True
 '''
 
+if use_jwt:
+    result += '''
+# JWT Configuration (django-ninja-jwt)
+NINJA_JWT = {
+    \"ACCESS_TOKEN_LIFETIME\": timedelta(minutes=30),
+    \"REFRESH_TOKEN_LIFETIME\": timedelta(days=7),
+    \"ROTATE_REFRESH_TOKENS\": True,
+    \"BLACKLIST_AFTER_ROTATION\": True,
+}
+'''
+
 settings_file.write_text(result, encoding='utf-8')
 "
 
 echo "🔌 6. Scaffolding config/api.py..."
-if [[ "$USE_SCALAR" == "Y" ]]; then
-  cat <<'EOF' >config/api.py
+if [[ "$USE_JWT" == "Y" ]]; then
+  if [[ "$USE_SCALAR" == "Y" ]]; then
+    cat <<'EOF' >config/api.py
+from ninja_extra import ControllerBase, NinjaExtraAPI, api_controller
+from ninja_extra.permissions import AllowAny
+from ninja_jwt.controller import (
+    NinjaJWTDefaultController,
+    TokenBlackListController,
+)
+from scalar_ninja import ScalarConfig, ScalarViewer
+
+
+@api_controller("/token", permissions=[AllowAny], tags=["Token"], auth=None)
+class NinjaJWTExtendedController(
+    NinjaJWTDefaultController, TokenBlackListController, ControllerBase
+):
+    """Full JWT endpoints: pair, refresh, verify, and blacklist (logout)."""
+
+    auto_import = False
+
+
+api = NinjaExtraAPI(
+    title="Ninja API",
+    version="1.0.0",
+    description="API documentation powered by Scalar and Django Ninja",
+    docs=ScalarViewer(ScalarConfig(layout="classic")),
+)
+
+# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify, /api/token/blacklist
+api.register_controllers(NinjaJWTExtendedController)
+
+
+@api.get("/health", tags=["System"])
+def health_check(request):
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "django-ninja",
+    }
+EOF
+  else
+    cat <<'EOF' >config/api.py
+from ninja_extra import ControllerBase, NinjaExtraAPI, api_controller
+from ninja_extra.permissions import AllowAny
+from ninja_jwt.controller import (
+    NinjaJWTDefaultController,
+    TokenBlackListController,
+)
+
+
+@api_controller("/token", permissions=[AllowAny], tags=["Token"], auth=None)
+class NinjaJWTExtendedController(
+    NinjaJWTDefaultController, TokenBlackListController, ControllerBase
+):
+    """Full JWT endpoints: pair, refresh, verify, and blacklist (logout)."""
+
+    auto_import = False
+
+
+api = NinjaExtraAPI(
+    title="Ninja API",
+    version="1.0.0",
+    description="API documentation powered by Django Ninja",
+)
+
+# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify, /api/token/blacklist
+api.register_controllers(NinjaJWTExtendedController)
+
+
+@api.get("/health", tags=["System"])
+def health_check(request):
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "django-ninja",
+    }
+EOF
+  fi
+elif [[ "$USE_EXTRA" == "Y" ]]; then
+  if [[ "$USE_SCALAR" == "Y" ]]; then
+    cat <<'EOF' >config/api.py
+from ninja_extra import NinjaExtraAPI
+from scalar_ninja import ScalarConfig, ScalarViewer
+
+api = NinjaExtraAPI(
+    title="Ninja API",
+    version="1.0.0",
+    description="API documentation powered by Scalar and Django Ninja Extra",
+    docs=ScalarViewer(ScalarConfig(layout="classic")),
+)
+
+
+@api.get("/health", tags=["System"])
+def health_check(request):
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "django-ninja",
+    }
+EOF
+  else
+    cat <<'EOF' >config/api.py
+from ninja_extra import NinjaExtraAPI
+
+api = NinjaExtraAPI(
+    title="Ninja API",
+    version="1.0.0",
+    description="API documentation powered by Django Ninja Extra",
+)
+
+
+@api.get("/health", tags=["System"])
+def health_check(request):
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "django-ninja",
+    }
+EOF
+  fi
+else
+  if [[ "$USE_SCALAR" == "Y" ]]; then
+    cat <<'EOF' >config/api.py
 from ninja import NinjaAPI
 from scalar_ninja import ScalarConfig, ScalarViewer
 
@@ -191,6 +373,7 @@ api = NinjaAPI(
     docs=ScalarViewer(ScalarConfig(layout="classic")),
 )
 
+
 @api.get("/health", tags=["System"])
 def health_check(request):
     """Health check endpoint."""
@@ -199,8 +382,8 @@ def health_check(request):
         "service": "django-ninja",
     }
 EOF
-else
-  cat <<'EOF' >config/api.py
+  else
+    cat <<'EOF' >config/api.py
 from ninja import NinjaAPI
 
 api = NinjaAPI(
@@ -209,6 +392,7 @@ api = NinjaAPI(
     description="API documentation powered by Django Ninja",
 )
 
+
 @api.get("/health", tags=["System"])
 def health_check(request):
     """Health check endpoint."""
@@ -217,6 +401,7 @@ def health_check(request):
         "service": "django-ninja",
     }
 EOF
+  fi
 fi
 
 if [[ "$CREATE_SAMPLE_APP" == "Y" ]]; then
@@ -315,6 +500,7 @@ echo
 echo "🌐 Available Endpoints:"
 echo "   📖 API Docs:    http://localhost:8000/api/docs"
 echo "   🩺 Health Check: http://localhost:8000/api/health"
+[[ "$USE_JWT" == "Y" ]] && echo "   🔑 JWT Token:    http://localhost:8000/api/token/pair"
 [[ "$CREATE_SAMPLE_APP" == "Y" ]] && echo "   🏓 Core Ping:    http://localhost:8000/api/core/ping"
 echo "   🛠️  Admin:       http://localhost:8000/admin/"
 echo
@@ -322,6 +508,11 @@ if [[ "$USE_RUFF" == "Y" ]]; then
   echo "🧹 Code Quality (Ruff):"
   echo "   uv run ruff format .     # Format all code"
   echo "   uv run ruff check --fix  # Lint and auto-fix"
+  echo
+fi
+if [[ "$USE_DJANGO_STUBS" == "Y" ]]; then
+  echo "🛡️  Type Safety & Autocomplete (django-stubs):"
+  echo "   Configured in dev dependencies and IDE path settings (Pyright/Pyrefly)."
   echo
 fi
 echo "💡 To create another app inside 'apps/':"
