@@ -164,13 +164,13 @@ echo "🔌 6. Scaffolding config/api.py..."
 if [[ "$USE_SCALAR" == "Y" ]]; then
   cat <<'EOF' >config/api.py
 from ninja import NinjaAPI
-from scalar_ninja import ScalarViewer
+from scalar_ninja import ScalarConfig, ScalarViewer
 
 api = NinjaAPI(
     title="Ninja API",
     version="1.0.0",
     description="API documentation powered by Scalar and Django Ninja",
-    docs=ScalarViewer(),
+    docs=ScalarViewer(ScalarConfig(layout="classic")),
 )
 
 @api.get("/health", tags=["System"])
@@ -307,8 +307,8 @@ if [[ "$USE_RUFF" == "Y" ]]; then
   echo
 fi
 echo "💡 To create another app inside 'apps/':"
-echo "   uv run python manage.py startapp meu_app apps/meu_app"
-echo "   (1. Add 'meu_app' to INSTALLED_APPS in config/settings.py)"
-echo "   (2. Create apps/meu_app/api.py with a router)"
-echo "   (3. Register it in config/api.py: api.add_router('/meu-app', router))"
+echo "   uv run python manage.py startapp my_app apps/my_app"
+echo "   (1. Add 'my_app' to INSTALLED_APPS in config/settings.py)"
+echo "   (2. Create apps/my_app/api.py with a router)"
+echo "   (3. Register it in config/api.py: api.add_router('/my-app', router))"
 echo

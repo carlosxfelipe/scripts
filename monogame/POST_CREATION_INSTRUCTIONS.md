@@ -12,7 +12,7 @@ dotnet workload install ios
 dotnet workload install wasm-tools
 ```
 
-*(Note: The iOS workload requires that you are on macOS with Xcode installed).*
+_(Note: The iOS workload requires that you are on macOS with Xcode installed)._
 
 ## 2. Restore Projects
 
@@ -38,7 +38,8 @@ To run the project on Android (make sure you have a running emulator or configur
 ```bash
 dotnet build MyGame.Android -t:Run
 ```
-*(Note: The `dotnet run` command may require additional configurations depending on the emulator; if you encounter errors, opening the project via Visual Studio or Rider/VS Code is usually the easiest, or use `dotnet build -t:Run`).*
+
+_(Note: The `dotnet run` command may require additional configurations depending on the emulator; if you encounter errors, opening the project via Visual Studio or Rider/VS Code is usually the easiest, or use `dotnet build -t:Run`)._
 
 ## 5. Run the Game (iOS)
 

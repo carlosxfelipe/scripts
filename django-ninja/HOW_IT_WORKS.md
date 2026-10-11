@@ -39,6 +39,7 @@ uv add --dev ruff
 ```
 
 > **Optional (for larger projects requiring Class-Based Controllers & Dependency Injection):**
+>
 > ```bash
 > uv add django-ninja-extra
 > ```
@@ -61,6 +62,7 @@ touch apps/__init__.py
 Open `config/settings.py` and apply the following configurations:
 
 #### a) Allow direct imports for apps inside `apps/`
+
 Right after `BASE_DIR = Path(__file__).resolve().parent.parent`, add:
 
 ```python
@@ -70,6 +72,7 @@ sys.path.insert(0, str(BASE_DIR / 'apps'))
 ```
 
 #### b) Register CORS in `INSTALLED_APPS`
+
 ```python
 INSTALLED_APPS = [
     # Third-party apps
@@ -88,6 +91,7 @@ INSTALLED_APPS = [
 ```
 
 #### c) Add CORS Middleware
+
 Add `CorsMiddleware` at the very top of `MIDDLEWARE` (before `CommonMiddleware`):
 
 ```python
@@ -112,13 +116,13 @@ Create `config/api.py`:
 
 ```python
 from ninja import NinjaAPI
-from scalar_ninja import ScalarViewer
+from scalar_ninja import ScalarConfig, ScalarViewer
 
 api = NinjaAPI(
     title="Ninja API",
     version="1.0.0",
     description="High-performance API built with Django Ninja and documented with Scalar.",
-    docs=ScalarViewer(),
+    docs=ScalarViewer(ScalarConfig(layout="classic")),
 )
 
 # System health check endpoint
@@ -206,11 +210,13 @@ Ruff is an extremely fast Python linter and code formatter created by Astral (th
 To keep your project structured into isolated modules inside `apps/`:
 
 ### 1. Create a new app inside `apps/`
+
 ```bash
 uv run python manage.py startapp products apps/products
 ```
 
 ### 2. Register the app in `config/settings.py`
+
 ```python
 INSTALLED_APPS = [
     ...
@@ -219,6 +225,7 @@ INSTALLED_APPS = [
 ```
 
 ### 3. Define the app routes in `apps/products/api.py`
+
 ```python
 from ninja import Router, Schema
 
@@ -238,6 +245,7 @@ def list_products(request):
 ```
 
 ### 4. Register the Router in `config/api.py`
+
 ```python
 from products.api import router as products_router
 
