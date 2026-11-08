@@ -54,7 +54,16 @@ while true; do
   break
 done
 
-DIR=$(ask "Target directory" "$PWD/$NAME")
+while true; do
+  DIR=$(ask "Target directory" "$PWD/$NAME")
+  if [[ -d "$DIR" ]] && [[ "$(ls -A "$DIR" 2>/dev/null)" ]]; then
+    echo "⚠️  Directory '$DIR' already exists and is not empty."
+    if ! ask_yn "Use this directory anyway? (Files may be overwritten)" "N"; then
+      continue
+    fi
+  fi
+  break
+done
 
 while true; do
   FRAMEWORK=$(ask "Target framework (net8.0/net9.0/net10.0)" "net8.0")

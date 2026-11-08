@@ -33,16 +33,36 @@ while true; do
     continue
   fi
 
-  if command -v python3 >/dev/null 2>&1; then
-    if ! python3 -c "import keyword, sys; sys.exit(0 if not keyword.iskeyword(sys.argv[1]) else 1)" "$NAME" 2>/dev/null; then
+  # Check against reserved Python keywords using UV (isolated with --no-project)
+  IS_KEYWORD=$(uv run --no-project python -c "import keyword, sys; print(keyword.iskeyword(sys.argv[1]))" "$NAME" 2>/dev/null || true)
+  if [[ "$IS_KEYWORD" == "True" ]]; then
+    echo "❌ '$NAME' is a reserved Python keyword. Please choose another name."
+    continue
+  fi
+
+  # Fallback check against standard Python keywords if uv run could not execute
+  if [[ -z "$IS_KEYWORD" ]]; then
+    case "$NAME" in
+    and | as | assert | async | await | break | class | continue | def | del | elif | else | except | finally | for | from | global | if | import | in | is | lambda | nonlocal | not | or | pass | raise | return | try | while | with | yield)
       echo "❌ '$NAME' is a reserved Python keyword. Please choose another name."
       continue
-    fi
+      ;;
+    esac
   fi
 
   break
 done
-DIR=$(ask "Target directory" "$PWD/$NAME")
+
+while true; do
+  DIR=$(ask "Target directory" "$PWD/$NAME")
+  if [[ -d "$DIR" ]] && [[ "$(ls -A "$DIR" 2>/dev/null)" ]]; then
+    echo "⚠️  Directory '$DIR' already exists and is not empty."
+    if ! ask_yn "Use this directory anyway? (Files may be overwritten)" "N"; then
+      continue
+    fi
+  fi
+  break
+done
 DEFAULT_PYTHON="3.14"
 PYTHON_VERSION=$(ask "Python version" "$DEFAULT_PYTHON")
 
@@ -113,7 +133,11 @@ cd "$DIR"
 
 echo
 echo "🚀 1. Initializing UV project with Python $PYTHON_VERSION..."
-uv init . --python "$PYTHON_VERSION" --name "$NAME" >/dev/null
+if ! uv init . --python "$PYTHON_VERSION" --name "$NAME" >/dev/null; then
+  echo "❌ Failed to initialize UV project in '$DIR'."
+  echo "   Make sure the directory does not already contain a conflicting pyproject.toml."
+  exit 1
+fi
 
 echo "📦 2. Installing dependencies..."
 DEPS=("django" "django-ninja")
@@ -257,27 +281,24 @@ settings_file.write_text(result, encoding='utf-8')
 "
 
 echo "🔌 6. Scaffolding config/api.py..."
+
+CORE_IMPORT=""
+CORE_ROUTER=""
+if [[ "$CREATE_SAMPLE_APP" == "Y" ]]; then
+  CORE_IMPORT="from core.api import router as core_router"
+  CORE_ROUTER="
+# Register modular routers
+api.add_router(\"/core\", core_router)"
+fi
+
 if [[ "$USE_JWT" == "Y" ]]; then
   if [[ "$USE_SCALAR" == "Y" ]]; then
-    cat <<'EOF' >config/api.py
-from ninja_extra import ControllerBase, NinjaExtraAPI, api_controller
-from ninja_extra.permissions import AllowAny
-from ninja_jwt.controller import (
-    NinjaJWTDefaultController,
-    TokenBlackListController,
-)
+    cat <<EOF >config/api.py
+from ninja_extra import NinjaExtraAPI
+from ninja_jwt.controller import NinjaJWTDefaultController
 from scalar_ninja import ScalarConfig, ScalarViewer
-
-
-@api_controller("/token", permissions=[AllowAny], tags=["Token"], auth=None)
-class NinjaJWTExtendedController(
-    NinjaJWTDefaultController, TokenBlackListController, ControllerBase
-):
-    """Full JWT endpoints: pair, refresh, verify, and blacklist (logout)."""
-
-    auto_import = False
-
-
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaExtraAPI(
     title="Ninja API",
     version="1.0.0",
@@ -285,8 +306,8 @@ api = NinjaExtraAPI(
     docs=ScalarViewer(ScalarConfig(layout="classic")),
 )
 
-# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify, /api/token/blacklist
-api.register_controllers(NinjaJWTExtendedController)
+# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify
+api.register_controllers(NinjaJWTDefaultController)
 
 
 @api.get("/health", tags=["System"])
@@ -296,34 +317,22 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   else
-    cat <<'EOF' >config/api.py
-from ninja_extra import ControllerBase, NinjaExtraAPI, api_controller
-from ninja_extra.permissions import AllowAny
-from ninja_jwt.controller import (
-    NinjaJWTDefaultController,
-    TokenBlackListController,
-)
-
-
-@api_controller("/token", permissions=[AllowAny], tags=["Token"], auth=None)
-class NinjaJWTExtendedController(
-    NinjaJWTDefaultController, TokenBlackListController, ControllerBase
-):
-    """Full JWT endpoints: pair, refresh, verify, and blacklist (logout)."""
-
-    auto_import = False
-
-
+    cat <<EOF >config/api.py
+from ninja_extra import NinjaExtraAPI
+from ninja_jwt.controller import NinjaJWTDefaultController
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaExtraAPI(
     title="Ninja API",
     version="1.0.0",
     description="API documentation powered by Django Ninja",
 )
 
-# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify, /api/token/blacklist
-api.register_controllers(NinjaJWTExtendedController)
+# JWT endpoints: /api/token/pair, /api/token/refresh, /api/token/verify
+api.register_controllers(NinjaJWTDefaultController)
 
 
 @api.get("/health", tags=["System"])
@@ -333,14 +342,16 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   fi
 elif [[ "$USE_EXTRA" == "Y" ]]; then
   if [[ "$USE_SCALAR" == "Y" ]]; then
-    cat <<'EOF' >config/api.py
+    cat <<EOF >config/api.py
 from ninja_extra import NinjaExtraAPI
 from scalar_ninja import ScalarConfig, ScalarViewer
-
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaExtraAPI(
     title="Ninja API",
     version="1.0.0",
@@ -356,11 +367,13 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   else
-    cat <<'EOF' >config/api.py
+    cat <<EOF >config/api.py
 from ninja_extra import NinjaExtraAPI
-
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaExtraAPI(
     title="Ninja API",
     version="1.0.0",
@@ -375,14 +388,16 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   fi
 else
   if [[ "$USE_SCALAR" == "Y" ]]; then
-    cat <<'EOF' >config/api.py
+    cat <<EOF >config/api.py
 from ninja import NinjaAPI
 from scalar_ninja import ScalarConfig, ScalarViewer
-
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaAPI(
     title="Ninja API",
     version="1.0.0",
@@ -398,11 +413,13 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   else
-    cat <<'EOF' >config/api.py
+    cat <<EOF >config/api.py
 from ninja import NinjaAPI
-
+${CORE_IMPORT:+$CORE_IMPORT
+}
 api = NinjaAPI(
     title="Ninja API",
     version="1.0.0",
@@ -417,17 +434,9 @@ def health_check(request):
         "status": "healthy",
         "service": "django-ninja",
     }
+$CORE_ROUTER
 EOF
   fi
-fi
-
-if [[ "$CREATE_SAMPLE_APP" == "Y" ]]; then
-  cat <<'EOF' >>config/api.py
-
-# Register modular routers
-from core.api import router as core_router
-api.add_router("/core", core_router)
-EOF
 fi
 
 echo "🗺️  7. Wiring API into config/urls.py..."
@@ -488,8 +497,15 @@ EOF
 
 if [[ "$USE_RUFF" == "Y" ]]; then
   echo "✨ 9. Formatting and linting codebase with Ruff..."
-  uv run ruff format .
-  uv run ruff check --fix .
+  if ! uv run ruff format . || ! uv run ruff check --fix .; then
+    echo
+    echo "⚠️  Ruff encountered formatting or linting issues that could not be auto-fixed."
+    echo "   Execution stopped before migrations/git to prevent committing unvalidated code."
+    echo "   Please inspect the issues above, fix them, and then run:"
+    [[ "$RUN_MIGRATIONS" == "Y" ]] && echo "     uv run python manage.py migrate"
+    [[ "$INIT_GIT" == "Y" ]] && echo "     git init && git add . && git commit -m 'Initial commit'"
+    exit 1
+  fi
 fi
 
 if [[ "$RUN_MIGRATIONS" == "Y" ]]; then
