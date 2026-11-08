@@ -23,8 +23,25 @@ command -v uv >/dev/null || {
 }
 
 echo "=== 🥷 New Django Ninja API Project Setup ==="
-NAME=$(ask "Project name" "my_ninja_api")
-NAME=$(echo "$NAME" | tr ' ' '_' | tr '[:upper:]' '[:lower:]')
+
+while true; do
+  NAME=$(ask "Project name" "my_ninja_api")
+  NAME=$(echo "$NAME" | tr '-' '_' | tr ' ' '_' | tr '[:upper:]' '[:lower:]')
+
+  if [[ ! "$NAME" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+    echo "❌ Invalid project name: '$NAME'. Must be a valid Python identifier (only letters, numbers, and underscores, cannot start with a number)."
+    continue
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 -c "import keyword, sys; sys.exit(0 if not keyword.iskeyword(sys.argv[1]) else 1)" "$NAME" 2>/dev/null; then
+      echo "❌ '$NAME' is a reserved Python keyword. Please choose another name."
+      continue
+    fi
+  fi
+
+  break
+done
 DIR=$(ask "Target directory" "$PWD/$NAME")
 DEFAULT_PYTHON="3.14"
 PYTHON_VERSION=$(ask "Python version" "$DEFAULT_PYTHON")
@@ -471,8 +488,8 @@ EOF
 
 if [[ "$USE_RUFF" == "Y" ]]; then
   echo "✨ 9. Formatting and linting codebase with Ruff..."
-  uv run ruff check --fix . >/dev/null 2>&1 || true
-  uv run ruff format . >/dev/null 2>&1 || true
+  uv run ruff format .
+  uv run ruff check --fix .
 fi
 
 if [[ "$RUN_MIGRATIONS" == "Y" ]]; then

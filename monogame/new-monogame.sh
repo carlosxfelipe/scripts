@@ -34,10 +34,35 @@ if ! dotnet new list kni-blazor-gl 2>/dev/null | grep -q kni-blazor-gl; then
 fi
 
 echo "=== New MonoGame Project ==="
-NAME=$(ask "Game name" "MyGame")
-NAME=${NAME// /}
+
+while true; do
+  NAME=$(ask "Game name" "MyGame")
+  NAME=${NAME// /}
+
+  if [[ ! "$NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$ ]]; then
+    echo "❌ Invalid game name: '$NAME'. Must be a valid C# identifier (only letters, numbers, underscores, and cannot start with a number)."
+    continue
+  fi
+
+  case "$NAME" in
+  abstract | as | base | bool | break | byte | case | catch | char | checked | class | const | continue | decimal | default | delegate | do | double | else | enum | event | explicit | extern | false | finally | fixed | float | for | foreach | goto | if | implicit | in | int | interface | internal | is | lock | long | namespace | new | null | object | operator | out | override | params | private | protected | public | readonly | ref | return | sbyte | sealed | short | sizeof | stackalloc | static | string | struct | switch | this | throw | true | try | typeof | uint | ulong | unchecked | unsafe | ushort | using | virtual | void | volatile | while)
+    echo "❌ '$NAME' is a reserved C# keyword. Please choose another name."
+    continue
+    ;;
+  esac
+
+  break
+done
+
 DIR=$(ask "Target directory" "$PWD/$NAME")
-FRAMEWORK=$(ask "Target framework (net8.0/net9.0/net10.0)" "net8.0")
+
+while true; do
+  FRAMEWORK=$(ask "Target framework (net8.0/net9.0/net10.0)" "net8.0")
+  case "$FRAMEWORK" in
+  net8.0 | net9.0 | net10.0) break ;;
+  *) echo "❌ Invalid framework: '$FRAMEWORK'. Please select net8.0, net9.0, or net10.0." ;;
+  esac
+done
 
 DESKTOP=N
 ANDROID=N
@@ -70,9 +95,11 @@ cd "$DIR"
 
 create() { # create template suffix
   local proj="$NAME.$2"
-  echo ">> Creating $proj ($1)"
-  dotnet new "$1" -n "$proj" -o "$proj" -f "$FRAMEWORK" 2>/dev/null ||
+  echo ">> Creating $proj ($1)..."
+  if ! dotnet new "$1" -n "$proj" -o "$proj" -f "$FRAMEWORK"; then
+    echo "⚠️  Failed to create with target framework $FRAMEWORK. Falling back to template default..."
     dotnet new "$1" -n "$proj" -o "$proj"
+  fi
   PROJS+=("$proj/$proj.csproj")
 }
 
