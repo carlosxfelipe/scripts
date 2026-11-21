@@ -31,8 +31,18 @@ echo "📱 5. Cleaning Flutter/Dart..."
 flutter pub cache clean -f
 rm -rf ~/.pub-cache/hosted/
 
-echo "🤖 6. Cleaning Android (Gradle)..."
+echo "🤖 6. Cleaning Android (Gradle & Emulators)..."
 rm -rf ~/.gradle/caches/
+if [ "$OS" = "Darwin" ]; then
+  ANDROID_SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+else
+  ANDROID_SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
+fi
+if [ -d "$ANDROID_SDK" ]; then
+  rm -rf "$ANDROID_SDK/system-images"
+  rm -rf "$ANDROID_SDK/.downloadIntermediates" "$ANDROID_SDK/.temp"
+fi
+rm -rf ~/.android/avd
 
 echo "🦀 7. Cleaning Rust (Cargo)..."
 rm -rf ~/.cargo/registry/cache
